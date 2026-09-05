@@ -1,0 +1,74 @@
+name: Comprobaciones
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static-tests:
+    name: Comprobaciones estáticas
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.8"
+      - name: Comprobar el contrato del repositorio
+        run: ./scripts/test_static.sh
+
+  windows-installer:
+    name: Instalador de Windows y enlace WSL2
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Comprobar sintaxis, argumentos, salida y errores
+        shell: powershell
+        run: .\tests\test_install_windows.ps1
+
+  fresh-ubuntu-cpu-install:
+    name: Instalación nueva de Ubuntu sobre CPU (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Instalar desde cero
+        run: ./scripts/install.sh --accelerator cpu
+      - name: Comprobar el entorno completo
+        run: ./scripts/doctor.sh
+      - name: Ejecutar una prueba física corta de MJX
+        run: ./scripts/sim2real.sh test-mjx --steps 10
+      - name: Cargar la red neuronal incluida
+        run: ./scripts/sim2real.sh visualizar-modelo-preentrenado --solo-comprobar
+
+  public-unified-bootstrap:
+    name: Autoinstalador público unificado (Ubuntu 24.04)
+    if: github.event_name == 'push'
+    needs: static-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Descargar esta revisión e instalar una copia nueva sobre CPU
+        env:
+          SIM2REAL_PUBLIC_REPOSITORY: GuillermoRosale5/Sim2Real-MJX-JAX-sobre-Linux-WSL
+        run: |
+          bootstrap_file="$(mktemp "${RUNNER_TEMP}/sim2real-bootstrap.XXXXXX.sh")"
+          trap 'rm -f -- "${bootstrap_file}"' EXIT
+          bootstrap_url="https://raw.githubusercontent.com/${SIM2REAL_PUBLIC_REPOSITORY}/${GITHUB_SHA}/scripts/bootstrap_ubuntu.sh"
+          curl --proto '=https' --tlsv1.2 --fail --show-error --location \
+            --retry 5 --retry-all-errors --output "${bootstrap_file}" "${bootstrap_url}"
+          bash -n "${bootstrap_file}"
+          bash "${bootstrap_file}" \
+            --accelerator cpu \
+            --install-path "${HOME}/sim2real-bootstrap-ci" \
+            --repo-url "https://github.com/${SIM2REAL_PUBLIC_REPOSITORY}.git"

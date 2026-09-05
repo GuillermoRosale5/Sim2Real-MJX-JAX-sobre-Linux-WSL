@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pose suelo2 del robot incorporada directamente en la geometría.
+
+  Este archivo no utiliza fotogramas clave ni ángulos de referencia de las
+  articulaciones para crear la postura inicial baja. En qpos0 las 12
+  articulaciones actuadas se encuentran a cero.
+
+  La postura baja está codificada mediante los valores pos/quat de los cuerpos.
+  Equivale a ROBOT_MJX.xml con q1=0 grados, q2=0 grados, q3=-6 grados y
+  una altura del cuerpo z=0.036 m. Frente a ROBOT_POSE_IDEAL_ALTO.xml, el
+  centro está 10 cm más bajo, los pies permanecen cerca del suelo y q2/q3 se
+  encuentran mucho más cerca de su posición neutra.
+-->
+<mujoco model="Robot_Pose_Suelo2_Baked">
+  <compiler angle="degree" inertiafromgeom="true" />
+  <option timestep="0.002" gravity="0 0 -9.81" iterations="12" ls_iterations="4" />
+  <asset>
+    <texture name="white_sky" type="skybox" builtin="flat" rgb1="1 1 1" rgb2="1 1 1" width="512" height="512" />
+  </asset>
+  <default>
+    <joint damping="0.1" armature="0.02" limited="true" />
+    <geom density="700" friction="1.0 0.1 0.1" contype="1" conaffinity="1" solref="0.003 1" solimp="0.9 0.95 0.01" />
+    <motor ctrlrange="-1 1" gear="10" />
+  </default>
+  <worldbody>
+    <geom name="sueloMundo" type="plane" pos="0 0 0" size="5 5 0.1" rgba="1 1 1 1" />
+    <body name="ROBOT" pos="0 0 0.036">
+      <joint name="E_00" type="free" />
+      <geom name="planchaCentral" type="cylinder" size="0.18 0.025" pos="0 0 0" mass="0.6" rgba="0.8 0.8 0.85 1" contype="0" conaffinity="0" />
+      <geom name="E_10" type="box" size="0.025 0.0425 0.020" pos="0.155 0 0" mass="0.0488" rgba="0.8 0.8 0.85 1" />
+      <geom name="E_20" type="box" size="0.0425 0.025 0.020" pos="0 0.155 0" mass="0.0488" rgba="0.8 0.8 0.85 1" />
+      <geom name="E_30" type="box" size="0.025 0.0425 0.020" pos="-0.155 0 0" mass="0.0488" rgba="0.8 0.8 0.85 1" />
+      <geom name="E_40" type="box" size="0.0425 0.025 0.020" pos="0 -0.155 0" mass="0.0488" rgba="0.8 0.8 0.85 1" />
+      <body name="Pata1" pos="0.18 0 0">
+        <joint name="ID_11_q1" type="hinge" axis="0 0 1" range="-100 100" />
+        <geom name="ID_11_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" />
+        <geom name="E_11" type="capsule" fromto="0 0 0  0.08 0 0" size="0.01" mass="0.0955" rgba="0.1 0.1 0.1 1" />
+        <body name="E_12" pos="0.08 0 0" quat="0.707106781 0 -0.707106781 0">
+          <joint name="ID_12_q2" type="hinge" axis="0 -1 0" range="-100 100" />
+          <geom name="ID_12_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 0.7071 0 0" />
+          <geom name="E_12_A" type="box" size="0.02 0.005 0.094" pos="0 0.015 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <geom name="E_12_B" type="box" size="0.02 0.005 0.094" pos="0 -0.015 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <body name="E_13" pos="0 0 -0.188" quat="0.998629535 0 0.0523359562 0">
+            <joint name="ID_13_q3" type="hinge" axis="0 -1 0" range="-110 110" />
+            <geom name="E_13_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 0.7071 0 0" />
+            <geom name="E_13_A" type="box" pos="0 0.007 -0.0925" size="0.012 0.002 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <geom name="E_13_B" type="box" pos="0 -0.007 -0.0925" size="0.012 0.002 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <body name="E_14" pos="0 0 -0.192">
+              <geom name="E_14_geom" type="sphere" size="0.015" mass="0.0127" rgba="0.1 0.1 0.1 1" friction="2 0.1 0.1" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Pata2" pos="0 0.18 0">
+        <joint name="ID_21_q1" type="hinge" axis="0 0 1" range="-100 100" />
+        <geom name="ID_21_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" />
+        <geom name="E_21" type="capsule" fromto="0 0 0  0 0.08 0" size="0.01" mass="0.0955" rgba="0.1 0.1 0.1 1" />
+        <body name="E_22" pos="0 0.08 0" quat="0.707106781 0.707106781 0 0">
+          <joint name="ID_22_q2" type="hinge" axis="1 0 0" range="-100 100" />
+          <geom name="ID_22_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 0 0.7071 0" />
+          <geom name="E_22_A" type="box" size="0.005 0.02 0.094" pos="0.015 0 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <geom name="E_22_B" type="box" size="0.005 0.02 0.094" pos="-0.015 0 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <body name="E_23" pos="0 0 -0.188" quat="0.998629535 -0.0523359562 0 0">
+            <joint name="ID_23_q3" type="hinge" axis="1 0 0" range="-110 110" />
+            <geom name="E_23_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 0 0.7071 0" />
+            <geom name="E_23_A" type="box" pos="0.007 0 -0.0925" size="0.002 0.012 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <geom name="E_23_B" type="box" pos="-0.007 0 -0.0925" size="0.002 0.012 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <body name="E_24" pos="0 0 -0.192">
+              <geom name="E_24_geom" type="sphere" size="0.015" mass="0.0127" rgba="0.1 0.1 0.1 1" friction="2 0.1 0.1" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Pata3" pos="-0.18 0 0">
+        <joint name="ID_31_q1" type="hinge" axis="0 0 1" range="-100 100" />
+        <geom name="ID_31_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" />
+        <geom name="E_31" type="capsule" fromto="0 0 0  -0.08 0 0" size="0.01" mass="0.0955" rgba="0.1 0.1 0.1 1" />
+        <body name="E_32" pos="-0.08 0 0" quat="0.707106781 0 0.707106781 0">
+          <joint name="ID_32_q2" type="hinge" axis="0 1 0" range="-100 100" />
+          <geom name="ID_32_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 -0.7071 0 0" />
+          <geom name="E_32_plate1" type="box" size="0.02 0.005 0.094" pos="0 0.015 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <geom name="E_32_plate2" type="box" size="0.02 0.005 0.094" pos="0 -0.015 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <body name="E_33" pos="0 0 -0.188" quat="0.998629535 0 -0.0523359562 0">
+            <joint name="ID_33_q3" type="hinge" axis="0 1 0" range="-110 110" />
+            <geom name="E_33_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 -0.7071 0 0" />
+            <geom name="E_33_plate1" type="box" pos="0 0.007 -0.0925" size="0.012 0.002 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <geom name="E_33_plate2" type="box" pos="0 -0.007 -0.0925" size="0.012 0.002 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <body name="E_34" pos="0 0 -0.192">
+              <geom name="E_34_geom" type="sphere" size="0.015" mass="0.0127" rgba="0.1 0.1 0.1 1" friction="2 0.1 0.1" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Pata4" pos="0 -0.18 0">
+        <joint name="ID_41_q1" type="hinge" axis="0 0 1" range="-100 100" />
+        <geom name="ID_41_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" />
+        <geom name="E_41" type="capsule" fromto="0 0 0  0 -0.08 0" size="0.01" mass="0.0955" rgba="0.1 0.1 0.1 1" />
+        <body name="E_42" pos="0 -0.08 0" quat="0.707106781 -0.707106781 0 0">
+          <joint name="ID_42_q2" type="hinge" axis="-1 0 0" range="-100 100" />
+          <geom name="ID_42_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 0 -0.7071 0" />
+          <geom name="E_42_A" type="box" size="0.005 0.02 0.094" pos="0.015 0 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <geom name="E_42_B" type="box" size="0.005 0.02 0.094" pos="-0.015 0 -0.094" mass="0.05445" rgba="0.1 0.1 0.1 1" />
+          <body name="E_43" pos="0 0 -0.188" quat="0.998629535 0.0523359562 0 0">
+            <joint name="ID_43_q3" type="hinge" axis="-1 0 0" range="-110 110" />
+            <geom name="E_43_geom" type="sphere" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1" quat="0.7071 0 -0.7071 0" />
+            <geom name="E_43_plate1" type="box" pos="0.007 0 -0.0925" size="0.002 0.012 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <geom name="E_43_plate2" type="box" pos="-0.007 0 -0.0925" size="0.002 0.012 0.0925" mass="0.0713" rgba="0.1 0.1 0.1 1" />
+            <body name="E_44" pos="0 0 -0.192">
+              <geom name="E_44_geom" type="sphere" size="0.015" mass="0.0127" rgba="0.1 0.1 0.1 1" friction="2 0.1 0.1" />
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor name="M_ID11" joint="ID_11_q1" />
+    <motor name="M_ID12" joint="ID_12_q2" />
+    <motor name="M_ID13" joint="ID_13_q3" />
+    <motor name="M_ID21" joint="ID_21_q1" />
+    <motor name="M_ID22" joint="ID_22_q2" />
+    <motor name="M_ID23" joint="ID_23_q3" />
+    <motor name="M_ID31" joint="ID_31_q1" />
+    <motor name="M_ID32" joint="ID_32_q2" />
+    <motor name="M_ID33" joint="ID_33_q3" />
+    <motor name="M_ID41" joint="ID_41_q1" />
+    <motor name="M_ID42" joint="ID_42_q2" />
+    <motor name="M_ID43" joint="ID_43_q3" />
+  </actuator>
+</mujoco>

@@ -1,0 +1,5 @@
+# Overlay oficial ROCm JAX v0.6.0 para Python 3.12 y ROCm 7.0.0-7.0.2.
+# Se instala despues de `uv sync` porque sustituye el jaxlib de PyPI.
+https://github.com/ROCm/rocm-jax/releases/download/rocm-jax-v0.6.0/jaxlib-0.6.2-cp312-cp312-manylinux2014_x86_64.whl#sha256=739fc2ebe28399f551a5c6daf529baae1637546a9a2a93789e3afd7ef0444e66
+https://github.com/ROCm/rocm-jax/releases/download/rocm-jax-v0.6.0/jax_rocm7_pjrt-0.6.0-py3-none-manylinux_2_28_x86_64.whl#sha256=b20b6820d4701a8edd83509dcbc8dc4fb712f40eab873668ae0dd17f5194c2d6
+https://github.com/ROCm/rocm-jax/releases/download/rocm-jax-v0.6.0/jax_rocm7_plugin-0.6.0-cp312-cp312-manylinux_2_28_x86_64.whl#sha256=cfecc2865ed450f996608b13af04189a2f9c1328ed896d71be0872d0e7d78389

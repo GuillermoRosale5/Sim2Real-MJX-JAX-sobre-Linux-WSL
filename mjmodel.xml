@@ -1,0 +1,132 @@
+<mujoco model="Sim2Real_KeyframeSelector">
+  <compiler angle="radian"/>
+
+  <option iterations="12" ls_iterations="4"/>
+
+  <size nkey="5"/>
+
+  <default>
+    <joint limited="true" armature="0.02" damping="0.1"/>
+    <geom friction="1 0.1 0.1" solref="0.003" solimp="0.9 0.95 0.01" density="700"/>
+    <general ctrlrange="-1 1" gear="10 0 0 0 0 0"/>
+  </default>
+
+  <asset>
+    <texture type="skybox" colorspace="auto" name="white_sky" builtin="flat" rgb1="1 1 1" rgb2="1 1 1" width="512" height="3072"/>
+  </asset>
+
+  <worldbody>
+    <geom name="sueloMundo" size="5 5 0.1" type="plane" rgba="0.9 0.9 0.9 1"/>
+    <body name="ROBOT" pos="0 0 0.115">
+      <joint name="E_00" type="free"/>
+      <geom name="planchaCentral" size="0.18 0.025" type="cylinder" contype="0" conaffinity="0" mass="0.6" rgba="0.8 0.8 0.85 1"/>
+      <geom name="E_10" size="0.025 0.0425 0.02" pos="0.155 0 0" type="box" mass="0.0488" rgba="0.8 0.8 0.85 1"/>
+      <geom name="E_20" size="0.0425 0.025 0.02" pos="0 0.155 0" type="box" mass="0.0488" rgba="0.8 0.8 0.85 1"/>
+      <geom name="E_30" size="0.025 0.0425 0.02" pos="-0.155 0 0" type="box" mass="0.0488" rgba="0.8 0.8 0.85 1"/>
+      <geom name="E_40" size="0.0425 0.025 0.02" pos="0 -0.155 0" type="box" mass="0.0488" rgba="0.8 0.8 0.85 1"/>
+      <body name="Pata1" pos="0.18 0 0">
+        <joint name="ID_11_q1" pos="0 0 0" axis="0 0 1" range="-1.74533 1.74533"/>
+        <geom name="ID_11_geom" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+        <geom name="E_11" size="0.01 0.04" pos="0.04 0 0" quat="0.707107 0 -0.707107 0" type="capsule" mass="0.0955" rgba="0.1 0.1 0.1 1"/>
+        <body name="E_12" pos="0.08 0 0">
+          <joint name="ID_12_q2" pos="0 0 0" axis="0 -1 0" ref="30" range="-1.74533 1.74533"/>
+          <geom name="ID_12_geom" size="0.04" quat="0.707107 0.707107 0 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+          <geom name="E_12_A" size="0.02 0.005 0.094" pos="0 0.015 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <geom name="E_12_B" size="0.02 0.005 0.094" pos="0 -0.015 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <body name="E_13" pos="0 0 -0.188">
+            <joint name="ID_13_q3" pos="0 0 0" axis="0 -1 0" ref="-110" range="-1.91986 1.91986"/>
+            <geom name="E_13_geom" size="0.04" quat="0.707107 0.707107 0 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+            <geom name="E_13_A" size="0.012 0.002 0.0925" pos="0 0.007 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <geom name="E_13_B" size="0.012 0.002 0.0925" pos="0 -0.007 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <body name="E_14" pos="0 0 -0.192">
+              <geom name="E_14_geom" size="0.015" friction="2" mass="0.0127" rgba="0.1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Pata2" pos="0 0.18 0">
+        <joint name="ID_21_q1" pos="0 0 0" axis="0 0 1" range="-1.74533 1.74533"/>
+        <geom name="ID_21_geom" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+        <geom name="E_21" size="0.01 0.04" pos="0 0.04 0" quat="0.707107 0.707107 0 0" type="capsule" mass="0.0955" rgba="0.1 0.1 0.1 1"/>
+        <body name="E_22" pos="0 0.08 0">
+          <joint name="ID_22_q2" pos="0 0 0" axis="1 0 0" ref="30" range="-1.74533 1.74533"/>
+          <geom name="ID_22_geom" size="0.04" quat="0.707107 0 0.707107 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+          <geom name="E_22_A" size="0.005 0.02 0.094" pos="0.015 0 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <geom name="E_22_B" size="0.005 0.02 0.094" pos="-0.015 0 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <body name="E_23" pos="0 0 -0.188">
+            <joint name="ID_23_q3" pos="0 0 0" axis="1 0 0" ref="-110" range="-1.91986 1.91986"/>
+            <geom name="E_23_geom" size="0.04" quat="0.707107 0 0.707107 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+            <geom name="E_23_A" size="0.002 0.012 0.0925" pos="0.007 0 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <geom name="E_23_B" size="0.002 0.012 0.0925" pos="-0.007 0 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <body name="E_24" pos="0 0 -0.192">
+              <geom name="E_24_geom" size="0.015" friction="2" mass="0.0127" rgba="0.1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Pata3" pos="-0.18 0 0">
+        <joint name="ID_31_q1" pos="0 0 0" axis="0 0 1" range="-1.74533 1.74533"/>
+        <geom name="ID_31_geom" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+        <geom name="E_31" size="0.01 0.04" pos="-0.04 0 0" quat="0.707107 0 0.707107 0" type="capsule" mass="0.0955" rgba="0.1 0.1 0.1 1"/>
+        <body name="E_32" pos="-0.08 0 0">
+          <joint name="ID_32_q2" pos="0 0 0" axis="0 1 0" ref="30" range="-1.74533 1.74533"/>
+          <geom name="ID_32_geom" size="0.04" quat="0.707107 -0.707107 0 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+          <geom name="E_32_plate1" size="0.02 0.005 0.094" pos="0 0.015 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <geom name="E_32_plate2" size="0.02 0.005 0.094" pos="0 -0.015 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <body name="E_33" pos="0 0 -0.188">
+            <joint name="ID_33_q3" pos="0 0 0" axis="0 1 0" ref="-110" range="-1.91986 1.91986"/>
+            <geom name="E_33_geom" size="0.04" quat="0.707107 -0.707107 0 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+            <geom name="E_33_plate1" size="0.012 0.002 0.0925" pos="0 0.007 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <geom name="E_33_plate2" size="0.012 0.002 0.0925" pos="0 -0.007 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <body name="E_34" pos="0 0 -0.192">
+              <geom name="E_34_geom" size="0.015" friction="2" mass="0.0127" rgba="0.1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Pata4" pos="0 -0.18 0">
+        <joint name="ID_41_q1" pos="0 0 0" axis="0 0 1" range="-1.74533 1.74533"/>
+        <geom name="ID_41_geom" size="0.04" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+        <geom name="E_41" size="0.01 0.04" pos="0 -0.04 0" quat="0.707107 -0.707107 0 0" type="capsule" mass="0.0955" rgba="0.1 0.1 0.1 1"/>
+        <body name="E_42" pos="0 -0.08 0">
+          <joint name="ID_42_q2" pos="0 0 0" axis="-1 0 0" ref="30" range="-1.74533 1.74533"/>
+          <geom name="ID_42_geom" size="0.04" quat="0.707107 0 -0.707107 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+          <geom name="E_42_A" size="0.005 0.02 0.094" pos="0.015 0 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <geom name="E_42_B" size="0.005 0.02 0.094" pos="-0.015 0 -0.094" type="box" mass="0.05445" rgba="0.1 0.1 0.1 1"/>
+          <body name="E_43" pos="0 0 -0.188">
+            <joint name="ID_43_q3" pos="0 0 0" axis="-1 0 0" ref="-110" range="-1.91986 1.91986"/>
+            <geom name="E_43_geom" size="0.04" quat="0.707107 0 -0.707107 0" mass="0.395" rgba="0.15 0.15 0.15 1"/>
+            <geom name="E_43_plate1" size="0.002 0.012 0.0925" pos="0.007 0 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <geom name="E_43_plate2" size="0.002 0.012 0.0925" pos="-0.007 0 -0.0925" type="box" mass="0.0713" rgba="0.1 0.1 0.1 1"/>
+            <body name="E_44" pos="0 0 -0.192">
+              <geom name="E_44_geom" size="0.015" friction="2" mass="0.0127" rgba="0.1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <general name="M_ID11" joint="ID_11_q1"/>
+    <general name="M_ID12" joint="ID_12_q2"/>
+    <general name="M_ID13" joint="ID_13_q3"/>
+    <general name="M_ID21" joint="ID_21_q1"/>
+    <general name="M_ID22" joint="ID_22_q2"/>
+    <general name="M_ID23" joint="ID_23_q3"/>
+    <general name="M_ID31" joint="ID_31_q1"/>
+    <general name="M_ID32" joint="ID_32_q2"/>
+    <general name="M_ID33" joint="ID_33_q3"/>
+    <general name="M_ID41" joint="ID_41_q1"/>
+    <general name="M_ID42" joint="ID_42_q2"/>
+    <general name="M_ID43" joint="ID_43_q3"/>
+  </actuator>
+
+  <keyframe>
+    <key name="A_q2=30_q3=-110"/>
+    <key name="B_q2=30_q3=-120" qpos="0 0 0.113 1 0 0 0 0 30 -120 0 30 -120 0 30 -120 0 30 -120"/>
+    <key name="C_q2=35_q3=-110" qpos="0 0 0.093 1 0 0 0 0 35 -110 0 35 -110 0 35 -110 0 35 -110"/>
+    <key name="D_q2=40_q3=-115" qpos="0 0 0.08 1 0 0 0 0 40 -115 0 40 -115 0 40 -115 0 40 -115"/>
+    <key name="E_q2=25_q3=-105" qpos="0 0 0.122 1 0 0 0 0 25 -105 0 25 -105 0 25 -105 0 25 -105"/>
+  </keyframe>
+</mujoco>

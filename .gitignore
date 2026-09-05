@@ -1,0 +1,39 @@
+# Entornos y dependencias reconstruibles
+.venv/
+.venvs/
+external/
+.sim2real/
+
+# Resultados: se conservan localmente pero nunca se suben al repositorio
+logs_sim2real_mjx/
+checkpoints*/
+modelos_antiguos_sim2real/
+runs/
+*.zip
+*.npz
+*.pkl
+*.ckpt
+*.pid
+
+# Python y herramientas
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytype/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Editores y sistemas operativos
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Excepcion controlada: la red preentrenada publicada forma parte del producto.
+modelo_preentrenado/*
+!modelo_preentrenado/
+!modelo_preentrenado/modelo_referencia_fase2_45932544/
+!modelo_preentrenado/modelo_referencia_fase2_45932544/**
