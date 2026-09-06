@@ -1,4 +1,4 @@
-# Modelo preentrenado de referencia · fase 2
+# Modelo preentrenado de referencia · fase 1
 
 Este es el modelo de referencia incluido para comprobar el sistema sin entrenar
 desde cero.
