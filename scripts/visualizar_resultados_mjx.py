@@ -17,6 +17,9 @@ try:
   import mujoco
   import mujoco.viewer
   from brax.training import checkpoint
+  from brax.training import networks as brax_networks
+  from brax.training import types as brax_types
+  from brax.training.acme import running_statistics
   from brax.training.agents.ppo import networks as ppo_networks
 except ModuleNotFoundError as exc:
   if exc.name not in {"jax", "mujoco", "brax"}:
@@ -226,6 +229,70 @@ def _crear_fabrica_redes(ppo_params):
   return functools.partial(ppo_networks.make_ppo_networks, **factory_kwargs)
 
 
+def _crear_redes_desde_checkpoint(
+    ruta_checkpoint: Path,
+    observation_size,
+    action_size: int,
+):
+  """Reconstruye la red y su preprocesado tal como Brax los guardo."""
+
+  ruta_configuracion = ruta_checkpoint / "ppo_network_config.json"
+  try:
+    configuracion = json.loads(ruta_configuracion.read_text(encoding="utf-8"))
+  except (OSError, json.JSONDecodeError) as exc:
+    raise ValueError(
+        f"No se puede leer la configuracion de red de {ruta_checkpoint}: {exc}"
+    ) from exc
+
+  action_size_guardado = configuracion.get("action_size")
+  if action_size_guardado is None or int(action_size_guardado) != int(action_size):
+    raise ValueError(
+        "El numero de acciones del checkpoint no coincide con el entorno "
+        f"({action_size_guardado} frente a {action_size})."
+    )
+
+  argumentos_red = dict(configuracion.get("network_factory_kwargs") or {})
+  nombre_activacion = argumentos_red.get("activation")
+  if isinstance(nombre_activacion, str):
+    try:
+      argumentos_red["activation"] = _ACTIVACIONES_DISPONIBLES[nombre_activacion]
+    except KeyError as exc:
+      raise ValueError(
+          f"Activacion de red no admitida: {nombre_activacion}."
+      ) from exc
+
+  for nombre in (
+      "policy_network_kernel_init_fn",
+      "value_network_kernel_init_fn",
+      "mean_kernel_init_fn",
+  ):
+    valor = argumentos_red.get(nombre)
+    if isinstance(valor, str):
+      try:
+        argumentos_red[nombre] = brax_networks.KERNEL_INITIALIZER[valor]
+      except KeyError as exc:
+        raise ValueError(f"Inicializador de red no admitido: {valor}.") from exc
+
+  if bool(configuracion.get("normalize_observations", False)):
+    argumentos_red["preprocess_observations_fn"] = running_statistics.normalize
+  else:
+    argumentos_red["preprocess_observations_fn"] = (
+        brax_types.identity_observation_preprocessor
+    )
+
+  try:
+    return ppo_networks.make_ppo_networks(
+        observation_size,
+        action_size,
+        **argumentos_red,
+    )
+  except (TypeError, ValueError) as exc:
+    raise ValueError(
+        "La configuracion de red guardada no es compatible con esta version "
+        f"de Brax: {exc}"
+    ) from exc
+
+
 def _aplicar_pose_inicial(
     configuracion_entorno, pose_inicial: str | None
 ) -> None:
@@ -316,26 +383,12 @@ def _cargar_politica(
       action_repeat=parametros_ppo.action_repeat,
   )
 
-  # Usa _crear_fabrica_redes para filtrar activacion_red (no es un argumento
-  # válido de make_ppo_networks) y asociarla al objeto nn.* correcto.
-  fabrica_redes = _crear_fabrica_redes(parametros_ppo)
   parametros = checkpoint.load(ruta_checkpoint.resolve())
-  tamanos_capas_ocultas = _inferir_tamanos_capas_ocultas(parametros)
-  if tamanos_capas_ocultas:
-    nombre_activacion = getattr(
-        parametros_ppo.network_factory, "activacion_red", "swish"
-    )
-    activacion = _ACTIVACIONES_DISPONIBLES.get(nombre_activacion, nn.swish)
-    fabrica_redes = functools.partial(
-        ppo_networks.make_ppo_networks,
-        policy_hidden_layer_sizes=tamanos_capas_ocultas,
-        value_hidden_layer_sizes=tamanos_capas_ocultas,
-        policy_obs_key=parametros_ppo.network_factory.policy_obs_key,
-        value_obs_key=parametros_ppo.network_factory.value_obs_key,
-        activation=activacion,
-    )
-
-  red_ppo = fabrica_redes(entorno_envuelto.observation_size, entorno_envuelto.action_size)
+  red_ppo = _crear_redes_desde_checkpoint(
+      ruta_checkpoint,
+      entorno_envuelto.observation_size,
+      entorno_envuelto.action_size,
+  )
   crear_politica = ppo_networks.make_inference_fn(red_ppo)
   politica = jax.jit(crear_politica(parametros, deterministic=True))
   return entorno, entorno_envuelto, politica, parametros_ppo

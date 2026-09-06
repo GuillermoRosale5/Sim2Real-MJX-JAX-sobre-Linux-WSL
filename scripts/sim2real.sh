@@ -1840,6 +1840,38 @@ minisimular() {
   uv_python "${comando[@]}"
 }
 
+visualizar_entornos_en_directo() {
+  local forzar_cpu=0
+  local -a argumentos_visualizador=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --forzar-cpu)
+        forzar_cpu=1
+        shift
+        ;;
+      *)
+        argumentos_visualizador+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  ensure_supported_linux
+  ensure_linux_fs
+  viewer_env
+  if (( forzar_cpu == 1 )); then
+    export JAX_PLATFORM_NAME=cpu
+    export JAX_PLATFORMS=cpu
+  else
+    ensure_gpu_visible
+  fi
+
+  uv_python "${REPO_ROOT}/scripts/ver_entornos_en_directo.py" \
+    --directorio-registros "${LOGS_DIR}" \
+    --checkpoint-respaldo "${CHECKPOINT_PREENTRENADO}" \
+    "${argumentos_visualizador[@]}"
+}
+
 print_platform_info() {
   initialize_runtime_profile
   echo "Host: $(sim2real_os_pretty_name) ($(sim2real_detect_host))"
@@ -1877,6 +1909,7 @@ Uso:
   scripts/sim2real.sh auto-clean-jit
   scripts/sim2real.sh visualizar-modelo-preentrenado [--impl jax] [--forzar-cpu] [--solo-comprobar]
   scripts/sim2real.sh visualizar-resultados [--forzar-cpu] [--checkpoint-anterior] [--solo-comprobar]
+  scripts/sim2real.sh visualizar-entornos-en-directo [--forzar-cpu] [opciones del visor]
   scripts/sim2real.sh minisimular [--ruta-xml XML] [--postura-inicial actual|suelo2|ideal|caida_lateral|boca_abajo] [--checkpoint-anterior] [--solo-comprobar]
   scripts/graficar_recompensas.sh [--mostrar]  # genera una grafica por recompensas*.csv
 
@@ -1886,6 +1919,7 @@ Atajos Bash:
   scripts/parar_sim2real.sh
   scripts/visualizar_modelo_preentrenado.sh [--impl jax] [--forzar-cpu] [--solo-comprobar]
   scripts/visualizar_ultimo_checkpoint.sh [opciones de visualizacion]
+  scripts/VER_EN_DIRECTO_100_ENTRENAMIENTOS_EN_PARALELO [--forzar-cpu] [opciones del visor]
   scripts/cambiar_fase_sim2real.sh [1|2|3]
   scripts/minisimular_ultimo_checkpoint.sh [opciones de minisimulacion]
   scripts/graficar_recompensas.sh [--modo-csv activo|todos] [opciones de grafica]
@@ -1919,6 +1953,7 @@ main() {
     auto-clean-jit) auto_clean_jit "$@" ;;
     visualizar-modelo-preentrenado) visualizar_modelo_preentrenado "$@" ;;
     visualizar-resultados) visualizar_resultados "$@" ;;
+    visualizar-entornos-en-directo) visualizar_entornos_en_directo "$@" ;;
     minisimular) minisimular "$@" ;;
     *) usage; exit 1 ;;
   esac
