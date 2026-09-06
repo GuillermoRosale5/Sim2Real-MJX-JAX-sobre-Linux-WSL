@@ -23,7 +23,10 @@ Como recomendación del autor para otros investigadores que deseen explorar alte
 a esta, PyTorch sí puede entrenar redes neuronales en GPU. Cuenta con rutas para
 NVIDIA/CUDA, AMD/ROCm, Intel/XPU y Apple/MPS, cada una con sus propios límites.
 Por tanto, Sim2Real MJX-JAX no utiliza JAX porque PyTorch sea incapaz de trabajar en
-GPU.
+GPU. 
+También se recomienda explorar MuJoCo Warp + PyTorch o RSL-RL. Una opción que ofrece un 
+rendimiento muy alto y escala bien en escenas complejas, pero está diseñado específicamente
+para NVIDIA renunciando a la adaptación a otros fabricantes de GPU. (a fecha de esta investigación)
 
 Con MuJoCo clásico, las llamadas a `mj_step` y `mujoco.rollout` calculan la física en 
 CPU. Podemos colocar la red y el PPO de PyTorch en una GPU, pero la simulación y el 
@@ -41,27 +44,16 @@ MJX-JAX está especializado en miles o decenas de miles de escenas iguales en
 paralelo. Para una sola escena puede ser bastante más lento que MuJoCo clásico,
 que está muy optimizado para reducir la latencia en CPU.
 
-## Comparación de las tres rutas principales
 
-| Configuración | Simulación física | Red y PPO | Consecuencia práctica |
-|---|---|---|---|
-| MuJoCo clásico + PyTorch | CPU | CPU o una GPU admitida por PyTorch | Es una combinación válida, pero poner la red en GPU no traslada la física y puede exigir transferencias CPU–GPU. |
-| MJX-JAX + PPO de Brax | CPU, GPU o TPU admitida por JAX | El mismo entorno JAX | Permite mantener física y aprendizaje sobre el acelerador y vectorizar conjuntamente muchos entornos. Es la ruta utilizada por Sim2Real MJX-JAX. |
-| MuJoCo Warp + PyTorch o RSL-RL | GPU NVIDIA | GPU NVIDIA | Ofrece un rendimiento muy alto y escala bien en escenas complejas, pero está diseñado específicamente para NVIDIA. |
 
-MuJoCo Warp es una alternativa muy interesante cuando el único objetivo es
-obtener el máximo rendimiento sobre NVIDIA. No sustituye el objetivo de este
-TFG porque renuncia a la adaptación entre fabricantes. Por ahora Sim2Real MJX-JAX
-mantiene `impl=jax`; `--impl warp` no forma parte de los perfiles admitidos.
-
-## JAX no convierte cualquier gráfica en compatible
+## JAX no es compatible con todas las gráficas 
 
 JAX proporciona una API común para trabajar con matrices y transformar
 funciones, pero necesita una implementación compilada para cada plataforma. El
 paquete Python `jax` no basta por sí solo: `jaxlib` y los complementos PJRT
 conectan el código con CUDA, ROCm, oneAPI u otro entorno de ejecución.
 
-Esto permite conservar casi todo el código científico al cambiar de fabricante,
+Podemos conservar casi todo el código científico al cambiar de fabricante,
 pero no elimina sus diferencias. Cada ruta conserva sus propios controladores,
 bibliotecas, versiones, sistemas operativos y listas de tarjetas admitidas. No
 existe un único binario de JAX que pueda ejecutarse indistintamente en cualquier
@@ -108,7 +100,10 @@ Un resultado positivo en otro equipo demuestra que esa ejecución concreta
 funciona. No permite afirmar que Sim2Real MJX-JAX haya validado todas las tarjetas de
 ese fabricante.
 
-## Estado real de esta versión
+
+
+
+## HARDWARE VALIDADO EN ESTA VERSIÓN 
 
 | Sistema y acelerador | Estado en Sim2Real MJX-JAX | Alcance real |
 |---|---|---|
@@ -122,9 +117,19 @@ ese fabricante.
 Esta tabla es deliberadamente más conservadora que la tabla oficial de JAX.
 La primera describe lo que las herramientas originales permiten en determinadas
 condiciones; esta describe lo que podemos defender con el código y las pruebas
-de Sim2Real MJX-JAX.
+realizadas por el autor de Sim2Real MJX-JAX.
 
-## Selección automática con `compatible`
+
+
+
+
+
+
+
+## SELECTOR AUTOMÁTICO DE PERFIL SEGÚN GPU DEL USUARIO
+
+Se ha implementado un sistema automático para no obligar al usuario a configurar 
+a mano el perfil para que este sistema trabaje con la GPU del hardware. 
 
 La instalación sencilla utiliza:
 
@@ -153,6 +158,33 @@ En una instalación nueva de Ubuntu nativo, el autoinstalador también puede
 reconocer una NVIDIA por PCI aunque el controlador todavía no esté cargado. En
 ese caso prepara el controlador, solicita el reinicio cuando sea necesario y
 continúa al repetir el mismo comando.
+
+## Pasos de comprobación del autoselector de perfil GPU
+
+La instalación solo se considera correcta después de comprobar toda la cadena:
+
+1. El sistema es Ubuntu, WSL2 y arquitectura admitida para el perfil.
+2. El controlador expone la GPU mediante `nvidia-smi` o `rocminfo`.
+3. El entorno aislado contiene exactamente las versiones fijadas.
+4. JAX carga la plataforma esperada y enumera el fabricante correcto.
+5. Un cálculo compilado mediante JIT se ejecuta en el dispositivo.
+6. MJX carga el XML y completa un paso físico real.
+
+La orden pública para repetir estas comprobaciones es:
+
+```bash
+./scripts/doctor.sh
+```
+
+Para NVIDIA o AMD debe aparecer `JAX backend: gpu` junto con el dispositivo
+correcto. Si un perfil GPU termina utilizando CPU, la comprobación falla; no se
+acepta una sustitución silenciosa.
+
+`doctor: OK` demuestra el contrato de software y el dispositivo visible durante
+esa ejecución. No convierte automáticamente en validada por el proyecto una
+combinación de hardware que todavía no hemos ensayado.
+
+
 
 ## Selección estricta con `auto`
 
@@ -344,32 +376,6 @@ CPU es también el resultado seguro del modo `compatible` cuando el sistema no
 ofrece una GPU admitida. El instalador lo muestra expresamente y nunca llama
 «GPU» a esa ejecución.
 
-## Comprobación completa del entorno
-
-Detectar el nombre de una tarjeta por PCI no demuestra que JAX pueda utilizarla.
-La instalación solo se considera correcta después de comprobar toda la cadena:
-
-1. El sistema es Ubuntu, WSL2 y arquitectura admitida para el perfil.
-2. El controlador expone la GPU mediante `nvidia-smi` o `rocminfo`.
-3. El entorno aislado contiene exactamente las versiones fijadas.
-4. JAX carga la plataforma esperada y enumera el fabricante correcto.
-5. Un cálculo compilado mediante JIT se ejecuta en el dispositivo.
-6. MJX carga el XML y completa un paso físico real.
-
-La orden pública para repetir estas comprobaciones es:
-
-```bash
-./scripts/doctor.sh
-```
-
-Para NVIDIA o AMD debe aparecer `JAX backend: gpu` junto con el dispositivo
-correcto. Si un perfil GPU termina utilizando CPU, la comprobación falla; no se
-acepta una sustitución silenciosa.
-
-`doctor: OK` demuestra el contrato de software y el dispositivo visible durante
-esa ejecución. No convierte automáticamente en validada por el proyecto una
-combinación de hardware que todavía no hemos ensayado.
-
 ## Máquinas virtuales y pruebas sin particionar
 
 La aceleración 3D de una máquina VirtualBox sirve para mostrar gráficos, pero su
@@ -382,6 +388,8 @@ nativo con GPU. Para una prueba nativa realista sin modificar las particiones
 del disco interno podemos instalar Ubuntu completamente en un SSD externo y
 arrancar el ordenador desde él. De ese modo se prueban el núcleo, el controlador
 y el acceso físico a la GPU como en una instalación nativa.
+
+
 
 ## Fuentes oficiales
 
