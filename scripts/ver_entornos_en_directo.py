@@ -1,4 +1,4 @@
-"""Muestra en una sola ventana los mejores intentos de la politica actual.
+"""Muestra en una ventana intentos buenos y distintos de la politica actual.
 
 La evaluacion se ejecuta en MJX/JAX por lotes. La ventana no vuelve a simular
 esas fisicas: reproduce un muestreo pequeno de qpos sobre una unica escena de
@@ -81,6 +81,126 @@ class LoteVisual:
   pasos_evaluados: int
   segundos_calculo: float
   intervalo_fotograma: float
+
+
+def _valores_estratificados(
+    generador: np.random.Generator,
+    cantidad: int,
+    minimo: float,
+    maximo: float,
+) -> np.ndarray:
+  """Sortea valores distintos repartiendo cada uno en un tramo exclusivo."""
+  if cantidad < 1:
+    raise ValueError("La cantidad de relojes debe ser mayor que cero.")
+  limites = np.linspace(minimo, maximo, cantidad + 1, dtype=np.float64)
+  valores = generador.uniform(limites[:-1], limites[1:])
+  generador.shuffle(valores)
+  return valores
+
+
+class RelojesReproduccion:
+  """Mantiene un tiempo de reproduccion independiente para cada robot."""
+
+  VELOCIDAD_MINIMA = 0.82
+  VELOCIDAD_MAXIMA = 1.18
+  PAUSA_MINIMA = 0.20
+  PAUSA_MAXIMA = 1.25
+
+  def __init__(
+      self,
+      lote: LoteVisual,
+      pasos_por_fotograma: int,
+      semilla: int,
+      inicio: float,
+  ):
+    if lote.qpos.ndim != 3 or lote.qpos.shape[1] != len(lote.longitudes):
+      raise ValueError("El lote no contiene una trayectoria por robot.")
+    if pasos_por_fotograma < 1:
+      raise ValueError("pasos_por_fotograma debe ser mayor que cero.")
+
+    self.cantidad = int(lote.qpos.shape[1])
+    self.intervalo_fotograma = float(lote.intervalo_fotograma)
+    if (
+        not math.isfinite(self.intervalo_fotograma)
+        or self.intervalo_fotograma <= 0
+    ):
+      raise ValueError("El intervalo entre fotogramas debe ser mayor que cero.")
+
+    # longitudes cuenta llamadas reales al entorno. El redondeo hacia arriba
+    # conserva tambien el ultimo tramo, aunque el episodio termine entre dos
+    # muestras visuales.
+    fotogramas_validos = 1 + np.ceil(
+        np.maximum(np.asarray(lote.longitudes, dtype=np.float64), 0.0)
+        / pasos_por_fotograma
+    ).astype(np.int32)
+    self.fotogramas_validos = np.clip(
+        fotogramas_validos, 1, lote.qpos.shape[0]
+    )
+
+    numero_checkpoint = int(lote.ruta_checkpoint.name)
+    secuencia = np.random.SeedSequence(
+        [int(semilla) & 0xFFFFFFFF, numero_checkpoint & 0xFFFFFFFF]
+    )
+    generador = np.random.default_rng(secuencia)
+
+    # El muestreo estratificado garantiza valores distintos incluso cuando se
+    # muestran cien robots. La semilla hace que el resultado sea reproducible.
+    self.velocidades = _valores_estratificados(
+        generador,
+        self.cantidad,
+        self.VELOCIDAD_MINIMA,
+        self.VELOCIDAD_MAXIMA,
+    )
+    self.pausas = _valores_estratificados(
+        generador,
+        self.cantidad,
+        self.PAUSA_MINIMA,
+        self.PAUSA_MAXIMA,
+    )
+    self.fases_iniciales = _valores_estratificados(
+        generador, self.cantidad, 0.0, 1.0
+    )
+
+    self.duraciones_movimiento = (
+        (self.fotogramas_validos.astype(np.float64) - 1.0)
+        * self.intervalo_fotograma
+        / self.velocidades
+    )
+    self.duraciones_ciclo = self.duraciones_movimiento + self.pausas
+    # La suma de una duracion y una pausa aleatorias ya es distinta con
+    # probabilidad practica uno. Resolver tambien una hipotetica coincidencia
+    # exacta convierte esa propiedad en una garantia, no en una suposicion.
+    duraciones_usadas: set[float] = set()
+    for indice, duracion in enumerate(self.duraciones_ciclo):
+      duracion = float(duracion)
+      while duracion in duraciones_usadas:
+        duracion = float(np.nextafter(duracion, math.inf))
+      self.duraciones_ciclo[indice] = duracion
+      self.pausas[indice] = duracion - self.duraciones_movimiento[indice]
+      duraciones_usadas.add(duracion)
+    # Entrar en puntos diferentes del primer ciclo evita que la ventana
+    # comience mostrando cien copias en la misma fase.
+    self.inicios_ciclo = (
+        float(inicio) - self.fases_iniciales * self.duraciones_ciclo
+    )
+
+  def indices(self, ahora: float) -> np.ndarray:
+    """Devuelve el fotograma propio de cada robot y reinicia ciclos vencidos."""
+    ahora = float(ahora)
+    transcurrido = np.maximum(ahora - self.inicios_ciclo, 0.0)
+    ciclos_completos = np.floor(transcurrido / self.duraciones_ciclo)
+    self.inicios_ciclo += ciclos_completos * self.duraciones_ciclo
+    transcurrido = np.maximum(ahora - self.inicios_ciclo, 0.0)
+
+    indices = np.floor(
+        transcurrido * self.velocidades / self.intervalo_fotograma
+    ).astype(np.int32)
+    indices = np.minimum(indices, self.fotogramas_validos - 1)
+    # Durante la pausa se mantiene la ultima pose. Al vencer el ciclo, el
+    # calculo anterior mueve solo ese robot de nuevo al fotograma inicial.
+    en_pausa = transcurrido >= self.duraciones_movimiento
+    indices[en_pausa] = self.fotogramas_validos[en_pausa] - 1
+    return indices
 
 
 @dataclass(frozen=True)
@@ -320,6 +440,123 @@ def _ancho_qpos_articulacion(tipo: int) -> int:
   return 1
 
 
+def _indices_qpos_para_diversidad(modelo: mujoco.MjModel) -> tuple[int, ...]:
+  """Conserva las poses y elimina la posicion horizontal absoluta del robot."""
+  conservar = np.ones((modelo.nq,), dtype=np.bool_)
+  for id_articulacion in range(modelo.njnt):
+    if int(modelo.jnt_type[id_articulacion]) != int(
+        mujoco.mjtJoint.mjJNT_FREE
+    ):
+      continue
+    inicio = int(modelo.jnt_qposadr[id_articulacion])
+    conservar[inicio:inicio + 2] = False
+  indices = tuple(int(indice) for indice in np.flatnonzero(conservar))
+  # Un modelo extrano compuesto solo por traslaciones sigue siendo evaluable.
+  return indices or tuple(range(modelo.nq))
+
+
+def _seleccionar_indices_diversos(
+    puntuaciones,
+    historial_qpos,
+    longitudes,
+    cantidad: int,
+    indices_qpos: tuple[int, ...],
+):
+  """Combina calidad y variedad sin sacar datos del acelerador.
+
+  La recompensa sigue siendo el criterio principal. La diversidad se calcula
+  con varias poses repartidas por toda la trayectoria, no solo con la pose
+  final. Primero se descarta el diez por ciento de menor calidad (salvo que
+  haga falta para completar la cantidad solicitada) y despues se aplica una
+  seleccion voraz: cada nuevo intento debe aportar movimiento distinto de los
+  ya elegidos siempre que quede alguno disponible.
+
+  Todo se ejecuta con operaciones JAX para no copiar las trayectorias de todos
+  los candidatos a CPU. Con la misma semilla y el mismo checkpoint el orden es
+  reproducible.
+  """
+  candidatos = int(puntuaciones.shape[0])
+  muestras = min(8, int(historial_qpos.shape[0]))
+  indices_temporales = jp.linspace(
+      0, historial_qpos.shape[0] - 1, muestras, dtype=jp.int32
+  )
+  poses_muestreadas = jp.take(
+      historial_qpos[indices_temporales], jp.asarray(indices_qpos), axis=-1
+  )
+  descriptores = jp.transpose(poses_muestreadas, (1, 0, 2)).reshape(
+      candidatos, -1
+  )
+  descriptores = jp.nan_to_num(
+      descriptores, nan=0.0, posinf=0.0, neginf=0.0
+  )
+
+  # Normalizar impide que la traslacion del cuerpo eclipse el movimiento de
+  # las articulaciones. El suelo de 0,05 evita amplificar ruido numerico de
+  # coordenadas que apenas cambian.
+  media = jp.mean(descriptores, axis=0, keepdims=True)
+  escala = jp.maximum(jp.std(descriptores, axis=0, keepdims=True), 0.05)
+  descriptores = jp.clip((descriptores - media) / escala, -6.0, 6.0)
+  longitudes_float = longitudes.astype(jp.float32)
+  longitud_normalizada = (
+      longitudes_float - jp.mean(longitudes_float)
+  ) / jp.maximum(jp.std(longitudes_float), 1.0)
+  descriptores = jp.concatenate(
+      (descriptores, longitud_normalizada[:, None]), axis=1
+  )
+
+  puntuaciones_seguras = jp.where(
+      jp.isfinite(puntuaciones), puntuaciones, -jp.inf
+  )
+  orden_calidad = jp.argsort(-puntuaciones_seguras, stable=True)
+  puesto = jp.empty((candidatos,), dtype=jp.int32)
+  puesto = puesto.at[orden_calidad].set(jp.arange(candidatos, dtype=jp.int32))
+  calidad = 1.0 - puesto.astype(jp.float32) / float(max(1, candidatos - 1))
+
+  # Dejar un pequeno margen fuera del top puro permite sustituir clones por
+  # trayectorias visualmente distintas sin mostrar intentos de baja calidad.
+  tamano_reserva = max(cantidad, math.ceil(candidatos * 0.90))
+  elegible = puesto < tamano_reserva
+  primer_indice = orden_calidad[0]
+  elegidos = jp.full((cantidad,), -1, dtype=jp.int32)
+  elegidos = elegidos.at[0].set(primer_indice)
+  mascara_elegidos = jp.zeros((candidatos,), dtype=jp.bool_)
+  mascara_elegidos = mascara_elegidos.at[primer_indice].set(True)
+
+  def distancia_a(indice):
+    diferencia = descriptores - descriptores[indice]
+    return jp.mean(jp.square(diferencia), axis=1)
+
+  distancia_minima = distancia_a(primer_indice)
+
+  def elegir_siguiente(indice_salida, carry):
+    indices, mascara, distancia = carry
+    disponibles = elegible & ~mascara
+    # Si existen trayectorias diferentes, una copia casi exacta no puede
+    # ocupar una plaza. Solo se relaja esta regla cuando no queda alternativa.
+    diferentes = disponibles & (distancia > 1e-6)
+    exigir_diferente = jp.any(diferentes)
+    disponibles = disponibles & ((distancia > 1e-6) | ~exigir_diferente)
+    diversidad = 1.0 - jp.exp(-jp.sqrt(jp.maximum(distancia, 0.0)))
+    criterio = 0.72 * calidad + 0.28 * diversidad
+    criterio = jp.where(disponibles, criterio, -jp.inf)
+    nuevo = jp.argmax(criterio)
+    indices = indices.at[indice_salida].set(nuevo)
+    mascara = mascara.at[nuevo].set(True)
+    distancia = jp.minimum(distancia, distancia_a(nuevo))
+    return indices, mascara, distancia
+
+  elegidos, _, _ = jax.lax.fori_loop(
+      1,
+      cantidad,
+      elegir_siguiente,
+      (elegidos, mascara_elegidos, distancia_minima),
+  )
+  # La seleccion usa diversidad, pero exponer el resultado ordenado por
+  # recompensa mantiene legible el resumen y estable la disposicion visual.
+  orden_final = jp.argsort(-puntuaciones_seguras[elegidos], stable=True)
+  return elegidos[orden_final]
+
+
 class EvaluadorLote:
   """Compila una evaluacion vectorizada y la reutiliza entre checkpoints."""
 
@@ -353,6 +590,9 @@ class EvaluadorLote:
 
     self.entorno = EntornoRobotMJX(config=configuracion)
     self.modelo_fuente = self.entorno.mj_model
+    self._indices_qpos_diversidad = _indices_qpos_para_diversidad(
+        self.modelo_fuente
+    )
     self.firma_xml = _firma_archivo(self.ruta_xml)
     self.firma_configuracion = _firma_configuracion_entorno(ruta_checkpoint)
     self.longitud = longitud
@@ -394,12 +634,15 @@ class EvaluadorLote:
     pasos_por_fotograma = self.pasos_por_fotograma
     entorno = self.entorno_envuelto
     crear_politica = self._crear_politica
+    indices_qpos_diversidad = self._indices_qpos_diversidad
 
     def evaluar(parametros, clave_maestra):
-      politica = crear_politica(parametros, deterministic=True)
+      # Cada intento recibe su propia secuencia pseudoaleatoria. No se repite
+      # cien veces la accion media de una politica determinista: se muestrea la
+      # distribucion aprendida, de forma reproducible a partir de --semilla.
+      politica = crear_politica(parametros, deterministic=False)
       clave_reinicio, clave_politica = jax.random.split(clave_maestra)
       claves_reinicio = jax.random.split(clave_reinicio, candidatos)
-      claves_politica = jax.random.split(clave_politica, candidatos)
       estado = entorno.reset(claves_reinicio)
       vivos = jp.ones((candidatos,), dtype=jp.bool_)
       retornos = jp.zeros((candidatos,), dtype=jp.float32)
@@ -407,11 +650,11 @@ class EvaluadorLote:
       ultimos_qpos = estado.data.qpos
 
       def avanzar_un_paso(carry, _):
-        estado, claves, retornos, longitudes, vivos, ultimos_qpos = carry
-        pares_claves = jax.vmap(jax.random.split)(claves)
-        siguientes_claves = pares_claves[:, 0]
-        claves_accion = pares_claves[:, 1]
-        acciones, _ = politica(estado.obs, claves_accion)
+        estado, clave, retornos, longitudes, vivos, ultimos_qpos = carry
+        siguiente_clave, clave_accion = jax.random.split(clave)
+        # Una clave para todo el lote es la interfaz normal de Brax: la muestra
+        # generada contiene una accion aleatoria distinta por candidato.
+        acciones, _ = politica(estado.obs, clave_accion)
         siguiente_estado = entorno.step(estado, acciones)
         recompensa = jp.nan_to_num(
             siguiente_estado.reward, nan=-1e6, posinf=1e6, neginf=-1e6
@@ -426,7 +669,7 @@ class EvaluadorLote:
         vivos = vivos & (siguiente_estado.done < 0.5) & qpos_finito
         return (
             siguiente_estado,
-            siguientes_claves,
+            siguiente_clave,
             retornos,
             longitudes,
             vivos,
@@ -441,7 +684,7 @@ class EvaluadorLote:
 
       carry_inicial = (
           estado,
-          claves_politica,
+          clave_politica,
           retornos,
           longitudes,
           vivos,
@@ -457,7 +700,17 @@ class EvaluadorLote:
       # queda penalizado de manera natural al dejar de sumar pasos.
       puntuaciones = retornos
       puntuaciones = jp.where(jp.isfinite(puntuaciones), puntuaciones, -jp.inf)
-      mejores_puntuaciones, indices = jax.lax.top_k(puntuaciones, cantidad)
+      historial_completo = jp.concatenate(
+          (estado.data.qpos[None, :, :], historial_qpos), axis=0
+      )
+      indices = _seleccionar_indices_diversos(
+          puntuaciones,
+          historial_completo,
+          longitudes,
+          cantidad,
+          indices_qpos_diversidad,
+      )
+      mejores_puntuaciones = puntuaciones[indices]
       qpos_inicial = estado.data.qpos[indices]
       mejores_qpos = jp.concatenate(
           (qpos_inicial[None, :, :], historial_qpos[:, indices, :]), axis=0
@@ -608,7 +861,8 @@ def _describir_lote(lote: LoteVisual) -> None:
   mejor = float(lote.puntuaciones[0])
   peor = float(lote.puntuaciones[-1])
   print(
-      f"Checkpoint {paso:,}: {len(lote.puntuaciones)} mejores intentos, "
+      f"Checkpoint {paso:,}: {len(lote.puntuaciones)} intentos elegidos por "
+      "recompensa y diversidad, "
       f"recompensa acumulada {mejor:.4f} .. {peor:.4f}, "
       f"calculado en {lote.segundos_calculo:.1f} s."
   )
@@ -745,9 +999,16 @@ def _reproducir(
   checkpoint_observado = checkpoint_mostrado
   checkpoints_acumulados = 0
   token_intentado = _token_checkpoint(checkpoint_mostrado)
-  siguiente_busqueda = time.monotonic() + argumentos.intervalo_busqueda
-  inicio_reproduccion = time.monotonic()
-  ultimo_fotograma = -1
+  ahora_inicial = time.monotonic()
+  siguiente_busqueda = ahora_inicial + argumentos.intervalo_busqueda
+  siguiente_presentacion = ahora_inicial
+  periodo_presentacion = 1.0 / argumentos.fps
+  relojes = RelojesReproduccion(
+      lote,
+      evaluador.pasos_por_fotograma,
+      argumentos.semilla,
+      ahora_inicial,
+  )
   seguir = not argumentos.sin_seguir_checkpoints
   registros = Path(argumentos.directorio_registros).expanduser().resolve()
   productor = ProductorActualizaciones(evaluador, argumentos)
@@ -778,8 +1039,13 @@ def _reproducir(
               evaluador = preparada.evaluador
               lote = preparada.lote
               checkpoint_mostrado = lote.ruta_checkpoint.resolve()
-              inicio_reproduccion = ahora
-              ultimo_fotograma = -1
+              relojes = RelojesReproduccion(
+                  lote,
+                  evaluador.pasos_por_fotograma,
+                  argumentos.semilla,
+                  ahora,
+              )
+              siguiente_presentacion = ahora
               _describir_lote(lote)
 
         if seguir and ahora >= siguiente_busqueda:
@@ -816,18 +1082,20 @@ def _reproducir(
                   productor.solicitar(token_candidato, candidato)
           siguiente_busqueda = ahora + argumentos.intervalo_busqueda
 
-        indice_fotograma = int(
-            (ahora - inicio_reproduccion) / lote.intervalo_fotograma
-        ) % lote.qpos.shape[0]
-        if indice_fotograma != ultimo_fotograma:
-          escena.aplicar(lote.qpos[indice_fotograma])
+        if ahora >= siguiente_presentacion:
+          indices_fotograma = relojes.indices(ahora)
+          indices_robot = np.arange(relojes.cantidad, dtype=np.int32)
+          escena.aplicar(lote.qpos[indices_fotograma, indices_robot, :])
           visor.sync()
-          ultimo_fotograma = indice_fotograma
+          siguiente_presentacion += periodo_presentacion
+          if siguiente_presentacion <= ahora:
+            # Si el renderizado tarda demasiado se descartan presentaciones
+            # antiguas: nunca se intenta recuperar el retraso de golpe.
+            siguiente_presentacion = ahora + periodo_presentacion
 
-        siguiente_fotograma = inicio_reproduccion + (
-            int((ahora - inicio_reproduccion) / lote.intervalo_fotograma) + 1
-        ) * lote.intervalo_fotograma
-        time.sleep(max(0.001, min(0.02, siguiente_fotograma - time.monotonic())))
+        time.sleep(
+            max(0.001, min(0.02, siguiente_presentacion - time.monotonic()))
+        )
   finally:
     productor.cerrar()
 
@@ -835,8 +1103,8 @@ def _reproducir(
 def _crear_argumentos() -> argparse.Namespace:
   parser = AnalizadorArgumentos(
       description=(
-          "Muestra los mejores entrenamientos en una sola ventana de MuJoCo, "
-          "sin hacer interactuar los robots."
+          "Muestra entrenamientos de alta recompensa y movimiento diferente "
+          "en una sola ventana de MuJoCo, sin hacer interactuar los robots."
       ),
       add_help=False,
   )
@@ -926,7 +1194,8 @@ def main() -> None:
   _comprobar_backend()
   print(
       f"Preparando {argumentos.candidatos} intentos para mostrar los "
-      f"{argumentos.cantidad} mejores. Checkpoint: {ruta_checkpoint}"
+      f"{argumentos.cantidad} mejores sin repetir movimientos casi iguales. "
+      f"Checkpoint: {ruta_checkpoint}"
   )
   if not argumentos.sin_seguir_checkpoints:
     print(
@@ -966,6 +1235,10 @@ def main() -> None:
     return
   if usando_respaldo:
     print("El visor comprobara automaticamente si aparece un checkpoint local.")
+  print(
+      "Reproduccion: cada robot tiene una fase, velocidad, pausa y reinicio "
+      "independientes."
+  )
   _reproducir(escena, evaluador, lote, argumentos)
 
 

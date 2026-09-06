@@ -8,7 +8,13 @@ import math
 from pathlib import Path
 import stat
 import tempfile
+from types import SimpleNamespace
 import unittest
+
+try:
+  import numpy as _numpy_real
+except ModuleNotFoundError:
+  _numpy_real = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +90,33 @@ def _cargar_funciones_puras() -> dict[str, object]:
       "np": _NumpyMinimo,
       "Path": Path,
   }
+  modulo = ast.fix_missing_locations(ast.Module(body=seleccionados, type_ignores=[]))
+  exec(compile(modulo, str(VISOR), "exec"), espacio)
+  return espacio
+
+
+def _cargar_relojes_con_numpy() -> dict[str, object]:
+  """Extrae el reloj sin importar JAX, Brax ni MuJoCo."""
+  if _numpy_real is None:
+    raise unittest.SkipTest("NumPy no esta disponible en el Python de pruebas.")
+  arbol = ast.parse(VISOR.read_text(encoding="utf-8"))
+  seleccionados: list[ast.stmt] = [
+      nodo
+      for nodo in arbol.body
+      if (
+          isinstance(nodo, ast.ImportFrom)
+          and nodo.module == "__future__"
+      )
+      or (
+          isinstance(nodo, ast.FunctionDef)
+          and nodo.name == "_valores_estratificados"
+      )
+      or (
+          isinstance(nodo, ast.ClassDef)
+          and nodo.name == "RelojesReproduccion"
+      )
+  ]
+  espacio: dict[str, object] = {"math": math, "np": _numpy_real}
   modulo = ast.fix_missing_locations(ast.Module(body=seleccionados, type_ignores=[]))
   exec(compile(modulo, str(VISOR), "exec"), espacio)
   return espacio
@@ -253,6 +286,73 @@ class VisualizadorEntornosDirectoTests(unittest.TestCase):
     self.assertIn("queue.Queue(maxsize=1)", fuente)
     self.assertIn("for actuador in list(hijo.actuators):", fuente)
     self.assertIn("for textura in list(hijo.textures):", fuente)
+
+  def test_cada_candidato_usa_ruido_y_la_seleccion_combina_calidad_y_diversidad(self) -> None:
+    fuente = VISOR.read_text(encoding="utf-8")
+    self.assertIn("deterministic=False", fuente)
+    self.assertIn("def _seleccionar_indices_diversos(", fuente)
+    self.assertIn("def _indices_qpos_para_diversidad(", fuente)
+    self.assertIn("mascara_elegidos", fuente)
+    self.assertIn("historial_completo", fuente)
+    self.assertNotIn("jax.lax.top_k(", fuente)
+
+  def test_reproduccion_indexa_y_reinicia_cada_robot_por_separado(self) -> None:
+    fuente = VISOR.read_text(encoding="utf-8")
+    self.assertIn("class RelojesReproduccion:", fuente)
+    self.assertIn("np.random.SeedSequence(", fuente)
+    self.assertIn("self.inicios_ciclo +=", fuente)
+    self.assertIn("indices[en_pausa]", fuente)
+    self.assertIn(
+        "lote.qpos[indices_fotograma, indices_robot, :]", fuente
+    )
+
+  @unittest.skipIf(_numpy_real is None, "NumPy no esta disponible")
+  def test_cien_relojes_son_distintos_reproducibles_y_respetan_final(self) -> None:
+    relojes = _cargar_relojes_con_numpy()["RelojesReproduccion"]
+    qpos = _numpy_real.zeros((7, 100, 19), dtype=_numpy_real.float32)
+    for fotograma in range(qpos.shape[0]):
+      qpos[fotograma, :, 0] = fotograma
+    lote = SimpleNamespace(
+        qpos=qpos,
+        longitudes=_numpy_real.full((100,), 6, dtype=_numpy_real.int32),
+        intervalo_fotograma=0.125,
+        ruta_checkpoint=Path("000000001024"),
+    )
+
+    primero = relojes(lote, pasos_por_fotograma=1, semilla=42, inicio=100.0)
+    segundo = relojes(lote, pasos_por_fotograma=1, semilla=42, inicio=100.0)
+    self.assertEqual(len(_numpy_real.unique(primero.velocidades)), 100)
+    self.assertEqual(len(_numpy_real.unique(primero.pausas)), 100)
+    self.assertEqual(len(_numpy_real.unique(primero.duraciones_ciclo)), 100)
+    _numpy_real.testing.assert_array_equal(
+        primero.velocidades, segundo.velocidades
+    )
+    _numpy_real.testing.assert_array_equal(primero.pausas, segundo.pausas)
+    _numpy_real.testing.assert_array_equal(
+        primero.inicios_ciclo, segundo.inicios_ciclo
+    )
+
+    indices_iniciales = primero.indices(100.0)
+    self.assertGreater(len(_numpy_real.unique(indices_iniciales)), 1)
+    self.assertTrue(_numpy_real.all(indices_iniciales >= 0))
+    self.assertTrue(_numpy_real.all(indices_iniciales < 7))
+    fotograma_compuesto = lote.qpos[
+        indices_iniciales, _numpy_real.arange(100), :
+    ]
+    self.assertEqual(fotograma_compuesto.shape, (100, 19))
+
+    inicio_robot = float(primero.inicios_ciclo[0])
+    durante_pausa = (
+        inicio_robot
+        + float(primero.duraciones_movimiento[0])
+        + float(primero.pausas[0]) * 0.5
+    )
+    self.assertEqual(
+        int(primero.indices(durante_pausa)[0]),
+        int(primero.fotogramas_validos[0] - 1),
+    )
+    tras_reinicio = inicio_robot + float(primero.duraciones_ciclo[0]) + 1e-6
+    self.assertEqual(int(primero.indices(tras_reinicio)[0]), 0)
 
   def test_ambos_visores_restauran_el_preprocesado_guardado_por_brax(self) -> None:
     fuente_multiple = VISOR.read_text(encoding="utf-8")
