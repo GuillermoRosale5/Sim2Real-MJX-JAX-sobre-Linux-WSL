@@ -3,19 +3,32 @@
 Este es el modelo de referencia incluido para comprobar el sistema sin entrenar
 desde cero.
 
-- Perfil PPO guardado: `lite`, nombre histórico equivalente al perfil actual
-  `ligero`.
-- Fase de recompensa: `2`, levantarse desde el suelo.
-- Semilla: `42`.
-- Checkpoint: `45.932.544` pasos de un objetivo de 100 millones.
-- Recompensa de evaluación guardada: `158,104767`.
-- Longitud media de evaluación: `1.432,25` pasos.
-- Formato: Orbax OCDBT.
+Es la red entrenada más estable que  tenemos. 
 
-No se presenta como un modelo terminado al 100 %. Es la referencia más avanzada
-y estable que se conserva actualmente. Sustituye como referencia visual al
-checkpoint nuevo de 1.548.288 pasos, que todavía estaba demasiado poco
-entrenado.
+Se optimizó para la siguiente configuración arquitectónica:
+
+Actor:
+59 observaciones
+      ↓
+256 neuronas + SiLU
+      ↓
+256 neuronas + SiLU
+      ↓
+24 parámetros de distribución
+      ↓
+12 acciones de los motores
+Critic:
+59 → 256 → 256 → 1 valor estimado
+
+Configuración adicional:
+- Dos capas ocultas de 256 neuronas.
+- Activación SiLU/Swish.
+- Distribución de acciones tanh_normal.
+- Normalización de observaciones.
+- Fase curricular 2.
+- 512 entornos paralelos.
+- Episodios de 1.500 pasos máx.
+
 
 El paquete conserva los pesos y las estadísticas de normalización de la
 política para inferencia y visualización. No incluye un estado completo del
