@@ -1,7 +1,9 @@
 # Arquitectura y datos locales
 
-Sim2Real MJX-JAX mantiene un único código científico para todos los equipos. El
-modelo, el entorno MJX, la recompensa y PPO no cambian según el fabricante de la
+Este entorno Sim2Real MJX-JAX mantiene un mismo sistema independientemente de la
+GPU con la que se trabaje, el objetivo es estandarizar el Hardware y sus capas. 
+El modelo de reinforcement learning, el entorno mujoco basado en XLA (JAX), el
+algoritmo de entrenamiento PPO basado en BRAX no cambian aunque sea distinta la
 GPU. La diferencia queda aislada en el entorno que proporciona JAX.
 
 ```text
@@ -17,11 +19,12 @@ Código Sim2Real MJX-JAX · XML + entorno + red + PPO
 ```
 
 Esta separación evita mezclar en el mismo Python complementos y variantes de
-`jaxlib` incompatibles. La GPU Intel no tiene un entorno propio en esta versión;
+`jaxlib` incompatibles. La GPU Intel no tiene un entorno propio que lo haga 
+compatible con esta versión, se están estudiando opciones para intentarlo;
 cuando se utiliza el modo `compatible`, el sistema continúa mediante CPU y lo
 indica claramente.
 
-## Organización del repositorio
+## Estructura de este repositorio
 
 ```text
 Sim2Real-MJX-JAX-sobre-Linux-WSL/
@@ -53,22 +56,10 @@ Sim2Real-MJX-JAX-sobre-Linux-WSL/
 ```
 
 `.venvs/`, `.sim2real/` y `logs_sim2real_mjx/` son datos locales y Git no
-los publica. La excepción es `modelo_preentrenado/`, donde se conserva la red de
-referencia de la fase 2 en el paso 45.932.544.
+los publica. La excepción es `modelo_preentrenado/`, donde se conserva una red
+que se considera estable con el modelo actual, se considera por ende de referencia.
 
-La capa propia de aprendizaje de Sim2Real MJX-JAX utiliza nombres en español. Las
-carpetas y APIs técnicas que pertenecen al ecosistema de Python, MuJoCo, MJX,
-JAX, Brax u Orbax mantienen su forma original para que el código se pueda
-comparar con las fuentes. Cuando un nombre propio del proyecto cambia, se
-actualizan sus llamadas y se elimina el anterior; no se conserva otra entrada
-que haga exactamente lo mismo.
-
-La red congelada conserva en `model.json` los identificadores con los que fue
-entrenada, por ejemplo `source_run: EntornoRobotMJX-...`. Son datos de
-procedencia incluidos en el manifiesto del modelo, no módulos ejecutables ni
-accesos alternativos al código actual.
-
-## Selección del perfil
+## Selección del perfil de la GPU
 
 `scripts/lib/platform.sh` detecta el sistema, resuelve el perfil y configura JAX
 antes de iniciar Python.
@@ -142,9 +133,8 @@ Los dos sistemas ejecutan el mismo código, pero no validan las mismas capas.
 WSL2 comprueba la integración con el controlador de Windows. Ubuntu nativo
 utiliza su propio kernel, controlador, arranque, Secure Boot y MOK.
 
-Una instalación completa en un SSD externo cuenta como Ubuntu nativo. Un Live
-USB solo proporciona una comprobación preliminar. VirtualBox 7.2 no expone la
-GPU PCI como CUDA o ROCm, por lo que allí `compatible` selecciona CPU. Los
+VirtualBox 7.2 no expone la GPU PCI como CUDA o ROCm, por lo que herramientas
+como ésta no son compatibles. Por ende allí `compatible` selecciona CPU. Los
 equipos de integración continua también validan el software sobre CPU, no una
 GPU física.
 
