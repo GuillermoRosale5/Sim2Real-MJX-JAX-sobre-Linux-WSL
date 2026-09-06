@@ -1,32 +1,36 @@
-# Aceleradores y compatibilidad
+# Aceleradores GPU y compatibilidad
 
-Esta guía explica qué parte de Sim2Real MJX-JAX se ejecuta en CPU, qué parte puede
-ejecutarse en GPU y qué combinaciones de sistema operativo y tarjeta gráfica
-admite realmente esta versión.
-
-Conviene dejar clara una diferencia desde el principio: que JAX o MuJoCo
-declaren una plataforma compatible no significa que Sim2Real MJX-JAX ya se haya
-probado de principio a fin en ella. En este documento separamos siempre el
-soporte de los proyectos originales de la validación realizada dentro del TFG.
+Esta sección explica cuándo y qué parte de Sim2Real MJX-JAX se ejecuta en CPU, 
+qué parte puede ejecutarse en GPU y qué combinaciones del sistema operativo que
+se tenga como base y su tarjeta tarjeta gráfica admite realmente esta versión.
 
 ## La decisión técnica del proyecto
 
-MuJoCo es un motor de simulación física. PyTorch, JAX y Brax cubren otras capas
+MuJoCo es un motor de simulación física ampliamente utilizado por la comunidad de
+Reinforcement Learning en robótica. La aceleración de entrenamiento de aprendizaje
+de redes neuronales para R-L emplean estándares sobre CUDA empleando librerías como
+PyTorch. Mujoco clásico es compatible con PyTorch, y este es compatible con GPU para
+entrenamiento masivo de sus redes neuronales y el algoritmo de calibración de pesos
+pero requiere centralizar toda la simulación física en su CPU.
+
+Por ese motivo en este proyecto hemos elegido una alternativa que ofrece mujoco que 
+nos permite no depender de la CPU para el cálculo de la física. Se trata de MuJoCo XLA
+basado en JAX y compatible con el mismo algoritmo de actualización de pesos PPO que
+al mismo tiempo se basa en BRAX, una variante de JAX. JAX y Brax cubren otras capas
 del sistema y no deben presentarse como si fueran la misma herramienta.
 
-PyTorch sí puede entrenar redes neuronales en GPU. Cuenta con rutas para
+Como recomendación del autor para otros investigadores que deseen explorar alternativas
+a esta, PyTorch sí puede entrenar redes neuronales en GPU. Cuenta con rutas para
 NVIDIA/CUDA, AMD/ROCm, Intel/XPU y Apple/MPS, cada una con sus propios límites.
 Por tanto, Sim2Real MJX-JAX no utiliza JAX porque PyTorch sea incapaz de trabajar en
 GPU.
 
-La razón está en la simulación física. Con MuJoCo clásico, las llamadas a
-`mj_step` y `mujoco.rollout` calculan la física en CPU. Podemos colocar la red y
-el PPO de PyTorch en una GPU, pero la simulación y el aprendizaje quedan
-separados entre CPU y GPU. La propia documentación de MuJoCo advierte de que
-las transferencias entre ambos dispositivos pueden convertirse en un cuello de
-botella.
+Con MuJoCo clásico, las llamadas a `mj_step` y `mujoco.rollout` calculan la física en 
+CPU. Podemos colocar la red y el PPO de PyTorch en una GPU, pero la simulación y el 
+aprendizaje quedan separados entre CPU y GPU. La propia documentación de MuJoCo advierte 
+de que las transferencias entre ambos dispositivos pueden convertirse en un cuello de botella.
 
-MJX-JAX vuelve a expresar la dinámica de MuJoCo mediante JAX/XLA. De esta forma,
+MJX-JAX expresa la dinámica de MuJoCo mediante JAX/XLA. De esta forma,
 el paso físico `mjx.step`, los lotes de entornos y el PPO de Brax pueden
 permanecer dentro del mismo ecosistema JAX y sobre el mismo acelerador. JAX
 permite compilar y vectorizar el cálculo con `jit`, `vmap` y `pmap`, que es justo
